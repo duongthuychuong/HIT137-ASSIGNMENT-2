@@ -1,5 +1,3 @@
-# q1.py
-
 from logic import encrypt_text, decrypt_text
 
 
