@@ -12,54 +12,96 @@
 # result. In such cases, it is mathematically impossible to determine the original character.
 #
 # Therefore, the decryption process is not fully reversible in all situations.
-def encrypt_char(c, shift1, shift2):
-    if c.islower():
-        if 'a' <= c <= 'm':
-            shift = shift1 * shift2
-            new_index = (ord(c) - ord('a') + shift) % 26
-        else:
-            shift = shift1 + shift2
-            new_index = (ord(c) - ord('a') - shift) % 26
-        return chr(new_index + ord('a'))
+# logic.py
 
-    elif c.isupper():
-        if 'A' <= c <= 'M':
-            shift = shift1
-            new_index = (ord(c) - ord('A') - shift) % 26
+def shift_char(char, amount, base):
+    """
+    This function shifts a single letter.
+    
+    char   = the letter to shift (e.g. 'a')
+    amount = how many positions to shift (positive = forward, negative = backward)
+    base   = starting point of the alphabet (ord('a')=97 for lowercase, ord('A')=65 for uppercase)
+    
+    Steps:
+    Convert letter to number → add/subtract → use %26 to stay in range → convert back to letter
+    """
+    pos = ord(char) - base          # Convert letter to a number 0~25
+    new_pos = (pos + amount) % 26   # Shift it, use %26 to prevent going out of range
+    return chr(new_pos + base)      # Convert back to a letter
+
+
+def encrypt_char(char, shift1, shift2):
+    """
+    Encrypt a single character.
+    """
+    # ---- Lowercase letters ----
+    if char.islower():
+        if 'a' <= char <= 'm':        # First half: a-m
+            amount = shift1 * shift2  # Shift forward
+            return shift_char(char, amount, ord('a'))
+        else:                          # Second half: n-z
+            amount = -(shift1 + shift2)  # Shift backward (negative = backward)
+            return shift_char(char, amount, ord('a'))
+
+    # ---- Uppercase letters ----
+    elif char.isupper():
+        if 'A' <= char <= 'M':        # First half: A-M
+            amount = -shift1          # Shift backward
+            return shift_char(char, amount, ord('A'))
+        else:                          # Second half: N-Z
+            amount = shift2 ** 2      # Shift forward by shift2 squared
+            return shift_char(char, amount, ord('A'))
+
+    # ---- Everything else (numbers, spaces, punctuation) ----
+    else:
+        return char  # Return unchanged
+
+
+def decrypt_char(char, shift1, shift2):
+    """
+    Decrypt a single character (exact reverse of encryption!)
+    """
+    # ---- Lowercase letters ----
+    if char.islower():
+        if 'a' <= char <= 'm':
+            # Encryption shifted forward by shift1*shift2, so decrypt shifts backward
+            amount = -(shift1 * shift2)
+            return shift_char(char, amount, ord('a'))
         else:
-            shift = shift2 ** 2
-            new_index = (ord(c) - ord('A') + shift) % 26
-        return chr(new_index + ord('A'))
+            # Encryption shifted backward by shift1+shift2, so decrypt shifts forward
+            amount = shift1 + shift2
+            return shift_char(char, amount, ord('a'))
+
+    elif char.isupper():
+        if 'A' <= char <= 'M':
+            # Encryption shifted backward by shift1, so decrypt shifts forward
+            amount = shift1
+            return shift_char(char, amount, ord('A'))
+        else:
+            # Encryption shifted forward by shift2², so decrypt shifts backward
+            amount = -(shift2 ** 2)
+            return shift_char(char, amount, ord('A'))
 
     else:
-        return c
+        return char
 
-
-def decrypt_char(c, shift1, shift2):
-    if c.islower():
-        if 'a' <= c <= 'm':
-            shift = shift1 * shift2
-            new_index = (ord(c) - ord('a') - shift) % 26
-        else:
-            shift = shift1 + shift2
-            new_index = (ord(c) - ord('a') + shift) % 26
-        return chr(new_index + ord('a'))
-
-    elif c.isupper():
-        if 'A' <= c <= 'M':
-            shift = shift1
-            new_index = (ord(c) - ord('A') + shift) % 26
-        else:
-            shift = shift2 ** 2
-            new_index = (ord(c) - ord('A') - shift) % 26
-        return chr(new_index + ord('A'))
-
-    else:
-        return c
 
 def encrypt_text(text, shift1, shift2):
-    return ''.join(encrypt_char(c, shift1, shift2) for c in text)
+    """
+    Encrypt an entire block of text.
+    Simply applies encrypt_char to every single character.
+    """
+    result = ""
+    for char in text:
+        result += encrypt_char(char, shift1, shift2)
+    return result
 
 
 def decrypt_text(text, shift1, shift2):
-    return ''.join(decrypt_char(c, shift1, shift2) for c in text)
+    """
+    Decrypt an entire block of text.
+    """
+    result = ""
+    for char in text:
+        result += decrypt_char(char, shift1, shift2)
+    return result
