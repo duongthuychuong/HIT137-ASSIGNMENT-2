@@ -1,0 +1,4 @@
+Hello World! This is my secret message.
+I love programming in Python.
+CDU is a great university!
+The quick brown fox jumps over the lazy dog.
