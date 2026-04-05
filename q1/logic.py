@@ -13,49 +13,95 @@
 #
 # Therefore, the decryption process is not fully reversible in all situations.
 # logic.py
+
 def shift_char(char, amount, base):
-    pos = ord(char) - base
-    new_pos = (pos + amount) % 26
-    return chr(new_pos + base)
+    """
+    This function shifts a single letter.
+    
+    char   = the letter to shift (e.g. 'a')
+    amount = how many positions to shift (positive = forward, negative = backward)
+    base   = starting point of the alphabet (ord('a')=97 for lowercase, ord('A')=65 for uppercase)
+    
+    Steps:
+    Convert letter to number → add/subtract → use %26 to stay in range → convert back to letter
+    """
+    pos = ord(char) - base          # Convert letter to a number 0~25
+    new_pos = (pos + amount) % 26   # Shift it, use %26 to prevent going out of range
+    return chr(new_pos + base)      # Convert back to a letter
+
 
 def encrypt_char(char, shift1, shift2):
+    """
+    Encrypt a single character.
+    """
+    # ---- Lowercase letters ----
+    if char.islower():
+        if 'a' <= char <= 'm':        # First half: a-m
+            amount = shift1 * shift2  # Shift forward
+            return shift_char(char, amount, ord('a'))
+        else:                          # Second half: n-z
+            amount = -(shift1 + shift2)  # Shift backward (negative = backward)
+            return shift_char(char, amount, ord('a'))
+
+    # ---- Uppercase letters ----
+    elif char.isupper():
+        if 'A' <= char <= 'M':        # First half: A-M
+            amount = -shift1          # Shift backward
+            return shift_char(char, amount, ord('A'))
+        else:                          # Second half: N-Z
+            amount = shift2 ** 2      # Shift forward by shift2 squared
+            return shift_char(char, amount, ord('A'))
+
+    # ---- Everything else (numbers, spaces, punctuation) ----
+    else:
+        return char  # Return unchanged
+
+
+def decrypt_char(char, shift1, shift2):
+    """
+    Decrypt a single character (exact reverse of encryption!)
+    """
+    # ---- Lowercase letters ----
     if char.islower():
         if 'a' <= char <= 'm':
-            return shift_char(char, shift1 * shift2, ord('a')), 'L'
+            # Encryption shifted forward by shift1*shift2, so decrypt shifts backward
+            amount = -(shift1 * shift2)
+            return shift_char(char, amount, ord('a'))
         else:
-            return shift_char(char, -(shift1 + shift2), ord('a')), 'U'
+            # Encryption shifted backward by shift1+shift2, so decrypt shifts forward
+            amount = shift1 + shift2
+            return shift_char(char, amount, ord('a'))
+
     elif char.isupper():
         if 'A' <= char <= 'M':
-            return shift_char(char, -shift1, ord('A')), 'L'
+            # Encryption shifted backward by shift1, so decrypt shifts forward
+            amount = shift1
+            return shift_char(char, amount, ord('A'))
         else:
-            return shift_char(char, shift2 ** 2, ord('A')), 'U'
-    else:
-        return char, 'O'
+            # Encryption shifted forward by shift2², so decrypt shifts backward
+            amount = -(shift2 ** 2)
+            return shift_char(char, amount, ord('A'))
 
-def decrypt_char(char, tag, shift1, shift2):
-    if char.islower():
-        if tag == 'L':
-            return shift_char(char, -(shift1 * shift2), ord('a'))
-        elif tag == 'U':
-            return shift_char(char, shift1 + shift2, ord('a'))
-    elif char.isupper():
-        if tag == 'L':
-            return shift_char(char, shift1, ord('A'))
-        elif tag == 'U':
-            return shift_char(char, -(shift2 ** 2), ord('A'))
-    return char
+    else:
+        return char
+
 
 def encrypt_text(text, shift1, shift2):
-    chars = []
-    tags = []
-    for c in text:
-        ec, tag = encrypt_char(c, shift1, shift2)
-        chars.append(ec)
-        tags.append(tag)
-    return ''.join(chars), ''.join(tags)
+    """
+    Encrypt an entire block of text.
+    Simply applies encrypt_char to every single character.
+    """
+    result = ""
+    for char in text:
+        result += encrypt_char(char, shift1, shift2)
+    return result
 
-def decrypt_text(text, shift1, shift2, tags):
-    result = []
-    for c, tag in zip(text, tags):
-        result.append(decrypt_char(c, tag, shift1, shift2))
-    return ''.join(result)
+
+def decrypt_text(text, shift1, shift2):
+    """
+    Decrypt an entire block of text.
+    """
+    result = ""
+    for char in text:
+        result += decrypt_char(char, shift1, shift2)
+    return result
