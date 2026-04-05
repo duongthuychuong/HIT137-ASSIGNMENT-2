@@ -23,12 +23,11 @@ def main():
 
     text = read_file("raw_text.txt")
 
-    encrypted, tags = encrypt_text(text, shift1, shift2)
+    encrypted = encrypt_text(text, shift1, shift2)
     write_file("encrypted_text.txt", encrypted)
-    write_file("tags.txt", tags)
     print("Encryption complete! Saved to encrypted_text.txt")
 
-    decrypted = decrypt_text(encrypted, shift1, shift2, tags)
+    decrypted = decrypt_text(encrypted, shift1, shift2)
     write_file("decrypted_text.txt", decrypted)
     print("Decryption complete! Saved to decrypted_text.txt")
 
