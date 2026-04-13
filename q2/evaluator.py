@@ -158,3 +158,14 @@ def evaluate_file(input_path):
         f.write("\n".join(output_lines).strip() + "\n")
         
     return results
+
+if __name__ == "__main__":
+    # Ensure sample_input.txt is in the same folder as this script
+    input_filename = "sample_input.txt"
+    
+    if os.path.exists(input_filename):
+        print(f"Processing {input_filename}...")
+        evaluate_file(input_filename)
+        print("Done! Check 'output.txt' for the results.")
+    else:
+        print(f"Error: Could not find {input_filename} in the current directory.")
