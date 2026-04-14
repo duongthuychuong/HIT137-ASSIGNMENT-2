@@ -1,171 +1,213 @@
 import os
 
-def tokenize(expression):
+# ---------------- TOKENIZER ---------------- #
+def tokenize(expr):
+    #Tokenize the input expression into a list of tokens, where each token is a tuple of (type, value).
     tokens = []
     i = 0
-    while i < len(expression):
-        char = expression[i]
-        if char.isspace():
+
+    while i < len(expr):
+        c = expr[i]
+        if c.isdigit() or c == '.': #Check for digits or decimal point to form a number token
+            num = c
             i += 1
-            continue
-        if char.isdigit() or char == '.':
-            num = ""
-            while i < len(expression) and (expression[i].isdigit() or expression[i] == '.'):
-                num += expression[i]
+            while i < len(expr) and (expr[i].isdigit() or expr[i] == '.'):
+                num += expr[i]
                 i += 1
             tokens.append(("NUM", num))
             continue
-        if char in "+-*/":
-            tokens.append(("OP", char))
-        elif char == '(':
-            tokens.append(("LPAREN", "("))
-        elif char == ')':
-            tokens.append(("RPAREN", ")"))
+        elif c in "+-*/": #Check for operators and add them as tokens
+            tokens.append(("OP", c))
+        elif c == "(": #Check for left parenthesis and add as token
+            tokens.append(("LPAREN", c)) 
+        elif c == ")": #Check for right parenthesis and add as token
+            tokens.append(("RPAREN", c))
+        elif c.isspace(): #Skip whitespace characters
+            i += 1
+            continue
         else:
-            return None  # Invalid character error
+            raise ValueError("Invalid character")
+
         i += 1
-    tokens.append(("END", "END"))
+
+    tokens.append(("END", ""))
     return tokens
 
-def format_result(val):
-    if val == "ERROR": return "ERROR"
-    if val == int(val):
-        return str(int(val))
-    return f"{round(float(val), 4):.4f}".rstrip('0').rstrip('.')
+# ---------------- PARSER STATE ---------------- #
+# _tokens holds the current token list; _pos is the read cursor.
+_tokens = []
+_pos = 0
+def _current():
+    return _tokens[_pos]
 
-def evaluate_file(input_path):
-    results = []
-    
-    with open(input_path, 'r') as f:
-        lines = f.readlines()
+def _eat(expected_type=None):
+    global _pos
+    tok = _current()
+    if expected_type and tok[0] != expected_type:
+        raise ValueError("Unexpected token")
+    _pos += 1
+    return tok
 
-    output_lines = []
-    for line in lines:
-        raw_input = line.strip()
-        if not raw_input: continue
-        
-        tokens = tokenize(raw_input)
-        
-        # State management for recursive descent
-        pos = 0
-        error_flag = False
+def _init_parser(tokens):
+    global _tokens, _pos
+    _tokens = tokens
+    _pos = 0
 
-        def get_token():
-            nonlocal pos
-            return tokens[pos] if tokens and pos < len(tokens) else ("END", "END")
+# ---------------- PARSER FUNCTIONS ---------------- #
+def _expression():
+    #expression → term ((+ | -) term)*
+    left_val, left_tree = _term() #Parse the first term and store its value and tree representation
 
-        def match(expected_type=None, expected_val=None):
-            nonlocal pos, error_flag
-            token = get_token()
-            if error_flag: return False
-            if (expected_type and token[0] == expected_type) or (expected_val and token[1] == expected_val):
-                pos += 1
-                return True
-            return False
-
-        def parse_expression():
-            nonlocal error_flag
-            tree_l, val_l = parse_term()
-            while get_token()[1] in ('+', '-'):
-                op = get_token()[1]
-                match()
-                tree_r, val_r = parse_term()
-                if error_flag: break
-                tree_l = f"({op} {tree_l} {tree_r})"
-                val_l = (val_l + val_r) if op == '+' else (val_l - val_r)
-            return tree_l, val_l
-
-        def parse_term():
-            nonlocal error_flag
-            tree_l, val_l = parse_factor()
-            # Handle standard *, / and implicit multiplication
-            while True:
-                token = get_token()
-                if token[1] in ('*', '/'):
-                    op = token[1]
-                    match()
-                    tree_r, val_r = parse_factor()
-                    if error_flag: break
-                    if op == '/' and val_r == 0: 
-                        error_flag = True
-                        break
-                    tree_l = f"({op} {tree_l} {tree_r})"
-                    val_l = (val_l * val_r) if op == '*' else (val_l / val_r)
-                # Implicit multiplication: next is NUM or LPAREN
-                elif token[0] in ('NUM', 'LPAREN'):
-                    tree_r, val_r = parse_factor()
-                    if error_flag: break
-                    tree_l = f"(* {tree_l} {tree_r})"
-                    val_l *= val_r
-                else:
-                    break
-            return tree_l, val_l
-
-        def parse_factor():
-            nonlocal error_flag
-            if match(expected_val='-'):
-                tree, val = parse_factor()
-                return f"(neg {tree})", -val
-            elif get_token()[1] == '+':
-                error_flag = True # Unary + not supported
-                return "ERROR", 0
-            return parse_primary()
-
-        def parse_primary():
-            nonlocal error_flag
-            token = get_token()
-            if match(expected_type='NUM'):
-                return str(format_result(float(token[1]))), float(token[1])
-            elif match(expected_type='LPAREN'):
-                tree, val = parse_expression()
-                if not match(expected_type='RPAREN'): error_flag = True
-                return tree, val
-            error_flag = True
-            return "ERROR", 0
-
-        # Run Parsing
-        try:
-            if tokens is None: raise Exception("Lexer Error")
-            tree_final, result_final = parse_expression()
-            if pos < len(tokens) - 1: error_flag = True # Leftover tokens
-        except:
-            error_flag = True
-
-        # Formatting Output
-        if error_flag:
-            res_dict = {"input": raw_input, "tree": "ERROR", "tokens": "ERROR", "result": "ERROR"}
+    while _current()[0] == "OP" and _current()[1] in ("+", "-"): #Check for addition or subtraction operator
+        op = _eat()[1]
+        right_val, right_tree = _term()
+        if op == "+":
+            left_val += right_val
         else:
-            token_str = " ".join([f"[{t[0]}:{t[1]}]" for t in tokens if t[0] != "END"]) + " [END]"
-            res_dict = {
-                "input": raw_input, 
-                "tree": tree_final, 
-                "tokens": token_str, 
-                "result": float(result_final)
-            }
-        
-        results.append(res_dict)
-        
-        # Build output.txt format
-        output_lines.append(f"Input: {res_dict['input']}")
-        output_lines.append(f"Tree: {res_dict['tree']}")
-        output_lines.append(f"Tokens: {res_dict['tokens']}")
-        output_lines.append(f"Result: {format_result(res_dict['result'])}")
-        output_lines.append("")
+            left_val -= right_val
+        left_tree = f"({op} {left_tree} {right_tree})"
+    return left_val, left_tree
 
-    # Write to file
+
+def _term():
+    #term → factor ((* | / | implicit *) factor)*
+    left_val, left_tree = _factor()
+
+    while True:
+        tok = _current()
+
+        if tok[0] == "OP" and tok[1] in ("*", "/"): #Check for multiplication or division operator
+            op = _eat()[1]
+            right_val, right_tree = _factor()
+            tmp_tree = f"({op} {left_tree} {right_tree})"
+
+            if op == "*":
+                left_val *= right_val
+            else:
+                if right_val == 0:
+                    raise ZeroDivisionError(tmp_tree)
+                left_val /= right_val
+
+            left_tree = tmp_tree
+
+        elif tok[0] in ("NUM", "LPAREN"): #Check for number or left parenthesis to handle implicit multiplication
+            right_val, right_tree = _factor()
+            left_val *= right_val
+            left_tree = f"(* {left_tree} {right_tree})"
+
+        else:
+            break
+
+    return left_val, left_tree
+
+
+def _factor():
+    #factor → NUMBER | (expression) | unary negation
+    tok = _current()
+
+    if tok == ("OP", "-"): #Check for unary negation operator
+        _eat("OP")
+        val, tree = _factor()
+        return -val, f"(neg {tree})"
+
+    if tok == ("OP", "+"): #Check for unary plus operator, which is not allowed in this implementation
+        raise ValueError("Unary + not allowed")
+
+    if tok[0] == "NUM": #Check for number token, consume it and return its value and string representation
+        _eat("NUM")
+        return float(tok[1]), tok[1]
+
+    elif tok[0] == "LPAREN": #Check for left parenthesis, consume it, parse the enclosed expression, and consume the right parenthesis
+        _eat("LPAREN")
+        val, tree = _expression()
+        _eat("RPAREN")
+        return val, tree
+
+    else:
+        raise ValueError("Invalid factor")
+
+# ---------------- FORMATTERS ---------------- #
+def format_tokens(tokens):
+    #Format the list of tokens into a string representation for output.
+    result = []
+    for t, v in tokens:
+        if t == "END":
+            result.append("[END]")
+        else:
+            result.append(f"[{t}:{v}]")
+    return " ".join(result)
+
+def format_result(value):
+    #Format the evaluated result for output, rounding to 4 decimal places if necessary and removing trailing zeros.
+    if value == int(value):
+        return str(int(value))
+    return f"{round(value, 4):.4f}".rstrip('0').rstrip('.')
+
+# ---------------- MAIN FUNCTION ---------------- #
+def evaluate_file(input_path: str) -> list[dict]:
+    #Read expressions from the input file, evaluate them, and write the results to an output file. 
+    #Return a list of dictionaries containing the input, tree representation, tokens, and result for each expression.
+    results = []
+
     output_path = os.path.join(os.path.dirname(input_path), "output.txt")
-    with open(output_path, 'w') as f:
-        f.write("\n".join(output_lines).strip() + "\n")
-        
+
+    with open(input_path, "r") as infile, open(output_path, "w") as outfile:
+        #Read all lines from the input file and process each expression
+        lines = infile.readlines()
+
+        for i, line in enumerate(lines):
+            expr = line.rstrip("\n")
+
+            # ---------- Step 1: Tokenization ----------
+            try:
+                tokens = tokenize(expr)
+                token_str = format_tokens(tokens)
+            except Exception:
+                tokens = None
+                token_str = "ERROR"
+
+            # ---------- Step 2: Parsing & Evaluation ----------
+            if tokens is not None:
+                try:
+                    _init_parser(tokens)
+                    value, tree = _expression()
+
+                    # Ensure full consumption
+                    if _current() != ("END", ""):
+                        raise ValueError("Unexpected token")
+
+                    formatted_result = format_result(value)
+
+                except (ValueError, ZeroDivisionError) as e:
+                    value = "ERROR"
+                    tree = e.args[0]
+                    formatted_result = "ERROR"
+            else:
+                value = "ERROR"
+                tree = "ERROR"
+                formatted_result = "ERROR"
+
+            # ---------- Write to output file ----------
+            outfile.write(f"Input: {expr}\n")
+            outfile.write(f"Tree: {tree}\n")
+            outfile.write(f"Tokens: {token_str}\n")
+            outfile.write(f"Result: {formatted_result}\n")
+
+            if i != len(lines) - 1:
+                outfile.write("\n")
+
+            # ---------- Store return structure ----------
+            results.append({
+                "input": expr,
+                "tree": tree,
+                "tokens": token_str,
+                "result": value
+            })
+
     return results
 
 if __name__ == "__main__":
-    # Ensure sample_input.txt is in the same folder as this script
-    input_filename = "sample_input.txt"
-    
-    if os.path.exists(input_filename):
-        print(f"Processing {input_filename}...")
-        evaluate_file(input_filename)
-        print("Done! Check 'output.txt' for the results.")
-    else:
-        print(f"Error: Could not find {input_filename} in the current directory.")
+
+    # update input_file variable below to test with different input files
+    input_file = "sample_input.txt"
+    evaluate_file(input_file)
