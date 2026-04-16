@@ -43,29 +43,41 @@
 #   These are small enough that no character crosses the m/n or M/N boundary.
 
 def encrypt_char(c, shift1, shift2):
+    # Encrypt one character based on its group
+
     if c.islower():
         if 'a' <= c <= 'm':
+            # First half lowercase → shift forward
             shift = shift1 * shift2
             new_index = (ord(c) - ord('a') + shift) % 26
         else:
+            # Second half lowercase → shift backward
             shift = shift1 + shift2
             new_index = (ord(c) - ord('a') - shift) % 26
         return chr(new_index + ord('a'))
 
     elif c.isupper():
         if 'A' <= c <= 'M':
+            # First half uppercase → shift backward
             shift = shift1
             new_index = (ord(c) - ord('A') - shift) % 26
         else:
+            # Second half uppercase → stronger forward shift
             shift = shift2 ** 2
             new_index = (ord(c) - ord('A') + shift) % 26
         return chr(new_index + ord('A'))
 
-    else:
-        return c
+    # Keep symbols, numbers unchanged
+    return c
 
 
 def decrypt_char(c, shift1, shift2):
+    # Try to reverse the encryption
+
+    # IMPORTANT:
+    # This assumes the encrypted character is still in the same group.
+    # If it moved to another group, the result may be wrong.
+
     if c.islower():
         if 'a' <= c <= 'm':
             shift = shift1 * shift2
@@ -87,9 +99,12 @@ def decrypt_char(c, shift1, shift2):
     else:
         return c
 
+
 def encrypt_text(text, shift1, shift2):
+    # Apply encryption to the whole string
     return ''.join(encrypt_char(c, shift1, shift2) for c in text)
 
 
 def decrypt_text(text, shift1, shift2):
+    # Apply decryption to the whole string
     return ''.join(decrypt_char(c, shift1, shift2) for c in text)
